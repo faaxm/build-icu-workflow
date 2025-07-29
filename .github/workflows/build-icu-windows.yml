@@ -170,11 +170,11 @@ jobs:
           if [ "$BUILD_TYPE" = "Debug" ]; then
             export CPPFLAGS="-MDd"
             export CFLAGS="-MDd"
-            export CXXFLAGS="-MDd"
+            export CXXFLAGS="-MDd /std:c++17"
           else
             export CPPFLAGS="-MD"
             export CFLAGS="-MD" 
-            export CXXFLAGS="-MD"
+            export CXXFLAGS="-MD /std:c++17"
           fi
           
           echo "Configuring ICU for ${{ matrix.arch }} ${{ matrix.build_type }} build..."
