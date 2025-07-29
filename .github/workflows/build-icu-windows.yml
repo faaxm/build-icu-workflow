@@ -292,7 +292,7 @@ jobs:
           retention-days: 30
           
       - name: Verify build output
-        shell: bash
+        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         run: |
           echo "=== Build Verification ==="
           echo "Architecture: ${{ matrix.arch }}"
