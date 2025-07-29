@@ -105,6 +105,9 @@ jobs:
         shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         env:
           CYGWIN: winsymlinks:native
+          VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
+          WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
+          PATH: ${{ env.PATH }}
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
@@ -113,8 +116,25 @@ jobs:
           /bin/ls -la | /usr/bin/head -10
           
           # Ensure MSVC tools are in PATH before Cygwin tools
-          export PATH="/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.*/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}:$PATH"
-          export PATH="/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Enterprise/Common7/IDE:$PATH"
+          # Use MSVC environment variables set by msvc-dev-cmd action
+          if [ -n "$VCINSTALLDIR" ]; then
+            MSVC_BIN_PATH=$(cygpath -u "$VCINSTALLDIR")Tools/MSVC/*/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
+            MSVC_BIN_PATH=$(echo $MSVC_BIN_PATH | head -1)  # Take first match if multiple versions
+            export PATH="$MSVC_BIN_PATH:$PATH"
+            echo "Added MSVC tools to PATH: $MSVC_BIN_PATH"
+          fi
+          
+          # Add Windows SDK tools to PATH
+          if [ -n "$WindowsSdkBinPath" ]; then
+            SDK_BIN_PATH=$(cygpath -u "$WindowsSdkBinPath")
+            export PATH="$SDK_BIN_PATH:$PATH"
+            echo "Added Windows SDK tools to PATH: $SDK_BIN_PATH"
+          fi
+          
+          # Verify critical tools are available
+          echo "Checking for required tools:"
+          which cl || echo "cl.exe not found in PATH"
+          which link || echo "link.exe not found in PATH"
           
           # Set build configuration
           BUILD_TYPE="${{ matrix.build_type }}"
@@ -142,11 +162,19 @@ jobs:
         shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         env:
           CYGWIN: winsymlinks:native
+          VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
+          WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
+          PATH: ${{ env.PATH }}
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
           # Ensure MSVC tools are in PATH
-          export PATH="/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.*/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}:$PATH"
+          # Use MSVC environment variables set by msvc-dev-cmd action
+          if [ -n "$VCINSTALLDIR" ]; then
+            MSVC_BIN_PATH=$(cygpath -u "$VCINSTALLDIR")Tools/MSVC/*/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
+            MSVC_BIN_PATH=$(echo $MSVC_BIN_PATH | head -1)  # Take first match if multiple versions
+            export PATH="$MSVC_BIN_PATH:$PATH"
+          fi
           
           echo "Building ICU libraries..."
           /usr/bin/make -j$(/usr/bin/nproc)
@@ -155,8 +183,20 @@ jobs:
         shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         env:
           CYGWIN: winsymlinks:native
+          VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
+          WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
+          PATH: ${{ env.PATH }}
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
+          
+          # Ensure MSVC tools are in PATH
+          # Use MSVC environment variables set by msvc-dev-cmd action
+          if [ -n "$VCINSTALLDIR" ]; then
+            MSVC_BIN_PATH=$(cygpath -u "$VCINSTALLDIR")Tools/MSVC/*/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
+            MSVC_BIN_PATH=$(echo $MSVC_BIN_PATH | head -1)  # Take first match if multiple versions
+            export PATH="$MSVC_BIN_PATH:$PATH"
+          fi
+          
           echo "Installing ICU to prefix directory..."
           /usr/bin/make install
           
