@@ -178,13 +178,14 @@ jobs:
           fi
           
           echo "Configuring ICU for ${{ matrix.arch }} ${{ matrix.build_type }} build..."
-          echo "Running: bash ./runConfigureICU Cygwin/MSVC --enable-static --disable-shared --disable-samples --disable-tests --prefix=/cygdrive/d/icu-build/${{ matrix.arch }}-${{ matrix.build_type }}"
+          echo "Running: bash ./runConfigureICU Cygwin/MSVC --enable-static --disable-shared --disable-samples --disable-tests --disable-extras --prefix=/cygdrive/d/icu-build/${{ matrix.arch }}-${{ matrix.build_type }}"
           
           /bin/bash ./runConfigureICU Cygwin/MSVC \
             --enable-static \
             --disable-shared \
             --disable-samples \
             --disable-tests \
+            --disable-extras \
             --prefix="/cygdrive/d/icu-build/${{ matrix.arch }}-${{ matrix.build_type }}"
             
       - name: Build ICU
