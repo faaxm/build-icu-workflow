@@ -118,23 +118,42 @@ jobs:
           # Ensure MSVC tools are in PATH before Cygwin tools
           # Use MSVC environment variables set by msvc-dev-cmd action
           if [ -n "$VCINSTALLDIR" ]; then
-            MSVC_BIN_PATH=$(cygpath -u "$VCINSTALLDIR")Tools/MSVC/*/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
-            MSVC_BIN_PATH=$(echo $MSVC_BIN_PATH | head -1)  # Take first match if multiple versions
-            export PATH="$MSVC_BIN_PATH:$PATH"
-            echo "Added MSVC tools to PATH: $MSVC_BIN_PATH"
+            # Convert Windows path to Cygwin path and expand wildcard
+            VCINSTALLDIR_UNIX=$(cygpath -u "$VCINSTALLDIR")
+            MSVC_BIN_PATH=$(find "${VCINSTALLDIR_UNIX}Tools/MSVC" -maxdepth 1 -type d -name "*" | head -1)/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
+            
+            if [ -d "$MSVC_BIN_PATH" ]; then
+              export PATH="$MSVC_BIN_PATH:$PATH"
+              echo "Added MSVC tools to PATH: $MSVC_BIN_PATH"
+            else
+              echo "Warning: MSVC bin path not found: $MSVC_BIN_PATH"
+            fi
           fi
           
           # Add Windows SDK tools to PATH
           if [ -n "$WindowsSdkBinPath" ]; then
             SDK_BIN_PATH=$(cygpath -u "$WindowsSdkBinPath")
-            export PATH="$SDK_BIN_PATH:$PATH"
-            echo "Added Windows SDK tools to PATH: $SDK_BIN_PATH"
+            if [ -d "$SDK_BIN_PATH" ]; then
+              export PATH="$SDK_BIN_PATH:$PATH"
+              echo "Added Windows SDK tools to PATH: $SDK_BIN_PATH"
+            fi
           fi
           
-          # Verify critical tools are available
+          # Remove Cygwin's link from PATH to avoid conflict with MSVC link.exe
+          export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g')
+          # Add /usr/bin back at the end (after MSVC tools)
+          export PATH="$PATH:/usr/bin"
+          
+          # Verify critical tools are available and show their full paths
           echo "Checking for required tools:"
-          which cl || echo "cl.exe not found in PATH"
-          which link || echo "link.exe not found in PATH"
+          echo "cl.exe location: $(which cl 2>/dev/null || echo 'NOT FOUND')"
+          echo "link.exe location: $(which link 2>/dev/null || echo 'NOT FOUND')"
+          
+          # Test that we have the Microsoft linker, not Cygwin's link
+          if which link >/dev/null 2>&1; then
+            echo "Testing linker type:"
+            link /? 2>&1 | head -2 || echo "Link test failed"
+          fi
           
           # Set build configuration
           BUILD_TYPE="${{ matrix.build_type }}"
@@ -168,13 +187,18 @@ jobs:
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
-          # Ensure MSVC tools are in PATH
-          # Use MSVC environment variables set by msvc-dev-cmd action
+          # Ensure MSVC tools are in PATH before Cygwin tools
           if [ -n "$VCINSTALLDIR" ]; then
-            MSVC_BIN_PATH=$(cygpath -u "$VCINSTALLDIR")Tools/MSVC/*/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
-            MSVC_BIN_PATH=$(echo $MSVC_BIN_PATH | head -1)  # Take first match if multiple versions
-            export PATH="$MSVC_BIN_PATH:$PATH"
+            VCINSTALLDIR_UNIX=$(cygpath -u "$VCINSTALLDIR")
+            MSVC_BIN_PATH=$(find "${VCINSTALLDIR_UNIX}Tools/MSVC" -maxdepth 1 -type d -name "*" | head -1)/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
+            if [ -d "$MSVC_BIN_PATH" ]; then
+              export PATH="$MSVC_BIN_PATH:$PATH"
+            fi
           fi
+          
+          # Remove Cygwin's link from PATH to avoid conflict with MSVC link.exe
+          export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g')
+          export PATH="$PATH:/usr/bin"
           
           echo "Building ICU libraries..."
           /usr/bin/make -j$(/usr/bin/nproc)
@@ -189,13 +213,18 @@ jobs:
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
-          # Ensure MSVC tools are in PATH
-          # Use MSVC environment variables set by msvc-dev-cmd action
+          # Ensure MSVC tools are in PATH before Cygwin tools
           if [ -n "$VCINSTALLDIR" ]; then
-            MSVC_BIN_PATH=$(cygpath -u "$VCINSTALLDIR")Tools/MSVC/*/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
-            MSVC_BIN_PATH=$(echo $MSVC_BIN_PATH | head -1)  # Take first match if multiple versions
-            export PATH="$MSVC_BIN_PATH:$PATH"
+            VCINSTALLDIR_UNIX=$(cygpath -u "$VCINSTALLDIR")
+            MSVC_BIN_PATH=$(find "${VCINSTALLDIR_UNIX}Tools/MSVC" -maxdepth 1 -type d -name "*" | head -1)/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
+            if [ -d "$MSVC_BIN_PATH" ]; then
+              export PATH="$MSVC_BIN_PATH:$PATH"
+            fi
           fi
+          
+          # Remove Cygwin's link from PATH to avoid conflict with MSVC link.exe
+          export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g')
+          export PATH="$PATH:/usr/bin"
           
           echo "Installing ICU to prefix directory..."
           /usr/bin/make install
