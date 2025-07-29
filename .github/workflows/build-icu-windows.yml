@@ -56,7 +56,17 @@ jobs:
           install-dir: D:\cygwin
           add-to-path: true
           
+      - name: Cache ICU source
+        uses: actions/cache@v4
+        id: cache-icu-source
+        with:
+          path: |
+            icu-source.zip
+            icu-release-77-1
+          key: icu-source-77-1-${{ runner.os }}
+          
       - name: Download ICU 77.1 source
+        if: steps.cache-icu-source.outputs.cache-hit != 'true'
         shell: powershell
         run: |
           $url = "https://github.com/unicode-org/icu/archive/refs/tags/release-77-1.zip"
