@@ -79,6 +79,7 @@ jobs:
       - name: Prepare ICU source for Windows build
         shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         run: |
+          cd "$GITHUB_WORKSPACE"
           echo "Current working directory: $(pwd)"
           echo "Directory contents:"
           /bin/ls -la
@@ -105,7 +106,7 @@ jobs:
         env:
           CYGWIN: winsymlinks:native
         run: |
-          cd "icu-release-77-1/icu4c/source"
+          cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
           echo "Current directory: $(pwd)"
           echo "Available files:"
@@ -142,7 +143,7 @@ jobs:
         env:
           CYGWIN: winsymlinks:native
         run: |
-          cd "icu-release-77-1/icu4c/source"
+          cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
           # Ensure MSVC tools are in PATH
           export PATH="/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.*/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}:$PATH"
@@ -155,7 +156,7 @@ jobs:
         env:
           CYGWIN: winsymlinks:native
         run: |
-          cd "icu-release-77-1/icu4c/source"
+          cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           echo "Installing ICU to prefix directory..."
           /usr/bin/make install
           
