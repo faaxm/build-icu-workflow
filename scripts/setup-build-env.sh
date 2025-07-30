@@ -13,44 +13,38 @@ BUILD_TYPE="${2:-Release}"
 echo "Architecture: $ARCH"
 echo "Build Type: $BUILD_TYPE" 
 
-# Fix the classic link.exe vs GNU link conflict for ICU configure script
-# The MSVC dev environment should have already set up the PATH correctly,
-# but we need to ensure Cygwin's link doesn't interfere with Microsoft's link.exe
+# Use the original working PATH setup approach
+# The working version (8cc99c0) had MSVC tools properly prioritized
 
-# Save the original PATH that includes MSVC tools at the front
-ORIGINAL_PATH="$PATH"
+# Ensure MSVC tools are in PATH before Cygwin tools  
+if [ -n "$VCINSTALLDIR" ]; then
+    # Convert Windows path to Cygwin path and expand wildcard
+    VCINSTALLDIR_UNIX=$(cygpath -u "$VCINSTALLDIR")
+    MSVC_BIN_PATH=$(find "${VCINSTALLDIR_UNIX}Tools/MSVC" -maxdepth 1 -type d -name "*" | head -1)/bin/Host${ARCH}/${ARCH}
+    
+    if [ -d "$MSVC_BIN_PATH" ]; then
+        export PATH="$MSVC_BIN_PATH:$PATH"
+        echo "Added MSVC tools to PATH: $MSVC_BIN_PATH"
+    else
+        echo "Warning: MSVC bin path not found: $MSVC_BIN_PATH"
+    fi
+fi
 
-# Remove ALL instances of /usr/bin from PATH (including middle and end positions)  
-export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g' | sed 's|/usr/bin$||g')
+# Add Windows SDK tools to PATH
+if [ -n "$WindowsSdkBinPath" ]; then
+    SDK_BIN_PATH=$(cygpath -u "$WindowsSdkBinPath")
+    if [ -d "$SDK_BIN_PATH" ]; then
+        export PATH="$SDK_BIN_PATH:$PATH"
+        echo "Added Windows SDK tools to PATH: $SDK_BIN_PATH"
+    fi
+fi
 
-# Add back essential Cygwin tools at the end, but exclude /usr/bin to avoid link conflict
-# We need make, bash, and other build tools, but not the GNU link command
-export PATH="$PATH:/usr/local/bin"
-
-# Add essential tools back but create a workaround for the link conflict
-# ICU's configure script needs various Unix tools from /usr/bin
+# Remove Cygwin's link from PATH to avoid conflict with MSVC link.exe
+export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g')
+# Add /usr/bin back at the end (after MSVC tools)
 export PATH="$PATH:/usr/bin"
 
-# Create a temporary override for link to ensure Microsoft's linker is used
-# We'll create a temporary directory with a link symlink to the Microsoft linker
-TEMP_BIN_DIR="/tmp/msvc-override"
-mkdir -p "$TEMP_BIN_DIR"
-ln -sf "/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/link.exe" "$TEMP_BIN_DIR/link"
-export PATH="$TEMP_BIN_DIR:$PATH"
-
-echo "Created temporary link override at $TEMP_BIN_DIR/link"
-
-echo "PATH configured for ICU build (avoiding GNU link conflict)"
-echo "MSVC tools prioritized, Cygwin link excluded"
-
-# Verify the correct link.exe is first in PATH
-if which link >/dev/null 2>&1; then
-    LINK_PATH=$(which link)
-    echo "Using linker: $LINK_PATH"
-else
-    echo "ERROR: No link.exe found in PATH"
-    exit 1
-fi
+echo "PATH configured using working approach from 8cc99c0"
 
 # Set compiler flags based on build type
 if [ "$BUILD_TYPE" = "Debug" ]; then

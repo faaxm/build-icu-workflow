@@ -26,7 +26,7 @@ jobs:
     
     defaults:
       run:
-        shell: C:\cygwin\bin\bash.exe --login -o igncr {0}
+        shell: bash
     
     steps:
       - name: Configure git line endings
@@ -48,8 +48,8 @@ jobs:
         with:
           platform: x86_64
           packages: bash make gcc-core gcc-g++ binutils dos2unix
-          install-dir: C:\cygwin
-          add-to-path: false
+          install-dir: D:\cygwin
+          add-to-path: true
           
       - name: Cache ICU source
         uses: actions/cache@v4
@@ -71,6 +71,7 @@ jobs:
           Write-Host "ICU source extracted successfully"
           
       - name: Prepare ICU source for Windows build
+        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         run: |
           cd "$GITHUB_WORKSPACE"
           ICU_SRC_DIR="icu-release-77-1/icu4c/source"
@@ -90,9 +91,12 @@ jobs:
           fi
           
       - name: Configure ICU build
+        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         env:
+          CYGWIN: winsymlinks:native
           VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
           WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
+          PATH: ${{ env.PATH }}
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
@@ -113,9 +117,12 @@ jobs:
             --prefix="$BUILD_PREFIX"
             
       - name: Build ICU
+        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         env:
+          CYGWIN: winsymlinks:native
           VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
           WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
+          PATH: ${{ env.PATH }}
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
@@ -126,9 +133,12 @@ jobs:
           make -j$(nproc)
           
       - name: Install ICU
+        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         env:
+          CYGWIN: winsymlinks:native
           VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
           WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
+          PATH: ${{ env.PATH }}
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
@@ -182,6 +192,7 @@ jobs:
           retention-days: 30
           
       - name: Verify build output
+        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         run: |
           echo "=== Build Verification ==="
           echo "ICU Version: ${{ env.ICU_VERSION }}"
