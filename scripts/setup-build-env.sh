@@ -20,12 +20,12 @@ if [ -n "$VCINSTALLDIR" ]; then
     
     if [ -d "$MSVC_BIN_PATH" ]; then
         export PATH="$MSVC_BIN_PATH:$PATH"
-        echo "✓ Added MSVC tools to PATH: $MSVC_BIN_PATH"
+        echo "Added MSVC tools to PATH: $MSVC_BIN_PATH"
     else
-        echo "⚠ Warning: MSVC bin path not found: $MSVC_BIN_PATH"
+        echo "Warning: MSVC bin path not found: $MSVC_BIN_PATH"
     fi
 else
-    echo "⚠ Warning: VCINSTALLDIR not set"
+    echo "Warning: VCINSTALLDIR not set"
 fi
 
 # Add Windows SDK tools to PATH
@@ -33,7 +33,7 @@ if [ -n "$WindowsSdkBinPath" ]; then
     SDK_BIN_PATH=$(cygpath -u "$WindowsSdkBinPath")
     if [ -d "$SDK_BIN_PATH" ]; then
         export PATH="$SDK_BIN_PATH:$PATH"
-        echo "✓ Added Windows SDK tools to PATH: $SDK_BIN_PATH"
+        echo "Added Windows SDK tools to PATH: $SDK_BIN_PATH"
     fi
 fi
 
@@ -56,23 +56,23 @@ fi
 # Verify critical tools are available
 echo "=== Tool verification ==="
 if which cl >/dev/null 2>&1; then
-    echo "✓ cl.exe found: $(which cl)"
+    echo "cl.exe found: $(which cl)"
 else
-    echo "✗ cl.exe NOT FOUND"
+    echo "cl.exe NOT FOUND"
     exit 1
 fi
 
 if which link >/dev/null 2>&1; then
-    echo "✓ link.exe found: $(which link)"
+    echo "link.exe found: $(which link)"
     # Verify it's Microsoft linker, not Cygwin's
     if link /? 2>&1 | grep -q "Microsoft"; then
-        echo "✓ Confirmed Microsoft linker"
+        echo "Confirmed Microsoft linker"
     else
-        echo "✗ Wrong linker detected - should be Microsoft link.exe"
+        echo "Wrong linker detected - should be Microsoft link.exe"
         exit 1
     fi
 else
-    echo "✗ link.exe NOT FOUND"
+    echo "link.exe NOT FOUND"
     exit 1
 fi
 

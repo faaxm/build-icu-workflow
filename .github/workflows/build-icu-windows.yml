@@ -68,7 +68,7 @@ jobs:
           Write-Host "Downloading ICU $version from: $url"
           Invoke-WebRequest -Uri $url -OutFile "icu-source.zip"
           Expand-Archive -Path "icu-source.zip" -DestinationPath . -Force
-          Write-Host "✓ ICU source extracted successfully"
+          Write-Host "ICU source extracted successfully"
           
       - name: Prepare ICU source for Windows build
         run: |
@@ -76,15 +76,15 @@ jobs:
           ICU_SRC_DIR="icu-release-77-1/icu4c/source"
           
           if [ -d "$ICU_SRC_DIR" ]; then
-            echo "✓ Found ICU source directory"
+            echo "Found ICU source directory"
             cd "$ICU_SRC_DIR"
             
             echo "Converting line endings and setting permissions..."
             find . -name "*.sh" -o -name "*.ac" -o -name "*.in" | xargs dos2unix 2>/dev/null || true
             chmod +x runConfigureICU configure install-sh 2>/dev/null || true
-            echo "✓ ICU source preparation completed"
+            echo "ICU source preparation completed"
           else
-            echo "✗ ICU source directory not found: $ICU_SRC_DIR"
+            echo "ERROR: ICU source directory not found: $ICU_SRC_DIR"
             find . -maxdepth 2 -type d
             exit 1
           fi
@@ -144,7 +144,7 @@ jobs:
           $buildPath = "${{ env.ICU_BUILD_DIR }}\${{ env.ICU_ARCH }}-${{ env.ICU_BUILD_TYPE }}"
           $artifactName = "icu-${{ env.ICU_ARCH }}-${{ env.ICU_BUILD_TYPE }}"
           
-          Write-Host "📦 Packaging ICU build artifacts from: $buildPath"
+          Write-Host "Packaging ICU build artifacts from: $buildPath"
           
           # Create artifact directory structure
           @('lib', 'include', 'bin') | ForEach-Object {
@@ -155,7 +155,7 @@ jobs:
           @('lib', 'include', 'bin') | ForEach-Object {
             if (Test-Path "$buildPath\$_") {
               Copy-Item -Path "$buildPath\$_\*" -Destination "$artifactName\$_\" -Recurse -Force
-              Write-Host "✓ Copied $_"
+              Write-Host "Copied $_"
             }
           }
           
@@ -172,7 +172,7 @@ jobs:
           "@ | Out-File -FilePath "$artifactName\BUILD_INFO.txt" -Encoding UTF8
           
           Compress-Archive -Path $artifactName -DestinationPath "$artifactName.zip" -Force
-          Write-Host "✓ Created $artifactName.zip"
+          Write-Host "Created $artifactName.zip"
           
       - name: Upload ICU build artifacts
         uses: actions/upload-artifact@v4
@@ -191,23 +191,23 @@ jobs:
           BUILD_PATH="/cygdrive/$(echo '${{ env.ICU_BUILD_DIR }}' | sed 's|\\|/|g' | sed 's|:|/|')/${{ env.ICU_ARCH }}-${{ env.ICU_BUILD_TYPE }}"
           
           if [ -d "$BUILD_PATH/lib" ]; then
-            echo "✓ Static libraries built:"
+            echo "Static libraries built:"
             ls -la "$BUILD_PATH/lib/"*.lib 2>/dev/null || echo "  No .lib files found"
             ls -la "$BUILD_PATH/lib/"*.a 2>/dev/null || echo "  No .a files found"
             echo "  Library count: $(ls "$BUILD_PATH/lib/" | wc -l)"
           else
-            echo "✗ ERROR: lib directory not found at $BUILD_PATH/lib"
+            echo "ERROR: lib directory not found at $BUILD_PATH/lib"
             exit 1
           fi
           
           if [ -d "$BUILD_PATH/include/unicode" ]; then
-            echo "✓ Header files installed:"
+            echo "Header files installed:"
             echo "  Header count: $(ls "$BUILD_PATH/include/unicode/" | wc -l)"
             ls "$BUILD_PATH/include/unicode/" | head -5
             echo "  ... (showing first 5 header files)"
           else
-            echo "✗ ERROR: Headers not found at $BUILD_PATH/include/unicode"
+            echo "ERROR: Headers not found at $BUILD_PATH/include/unicode"
             exit 1
           fi
           
-          echo "✅ Build completed successfully"
+          echo "Build completed successfully"
