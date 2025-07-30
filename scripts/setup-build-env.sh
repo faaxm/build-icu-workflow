@@ -16,7 +16,7 @@ echo "Build Type: $BUILD_TYPE"
 # Set up MSVC environment in PATH
 if [ -n "$VCINSTALLDIR" ]; then
     VCINSTALLDIR_UNIX=$(cygpath -u "$VCINSTALLDIR")
-    MSVC_BIN_PATH=$(find "${VCINSTALLDIR_UNIX}Tools/MSVC" -maxdepth 2 -type d -name "Host${ARCH}" | head -1)/${ARCH}
+    MSVC_BIN_PATH=$(find "${VCINSTALLDIR_UNIX}Tools/MSVC" -maxdepth 2 -path "*/bin/Host${ARCH}" -type d | head -1)/${ARCH}
     
     if [ -d "$MSVC_BIN_PATH" ]; then
         export PATH="$MSVC_BIN_PATH:$PATH"
