@@ -4,7 +4,9 @@
       "WebFetch(domain:unicode-org.github.io)",
       "Bash(gh run watch:*)",
       "Bash(gh run view:*)",
-      "Bash(gh run list:*)"
+      "Bash(gh run list:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }
