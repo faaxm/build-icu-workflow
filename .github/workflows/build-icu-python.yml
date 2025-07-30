@@ -1,0 +1,150 @@
+name: Build ICU with Python Script
+
+on:
+  push:
+    branches: [ master, main ]
+    paths:
+      - '.github/workflows/build-icu-python.yml'
+      - 'build_icu.py'
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - '.github/workflows/build-icu-python.yml'
+      - 'build_icu.py'
+
+jobs:
+  build-icu-separate-data:
+    runs-on: windows-latest
+    name: ICU Build (Separate Data)
+    
+    steps:
+      - name: Configure git line endings
+        shell: powershell
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+          
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          
+      - name: Install Cygwin with required packages
+        uses: cygwin/cygwin-install-action@master
+        with:
+          platform: x86_64
+          packages: >-
+            bash
+            make
+            gcc-core
+            gcc-g++
+            binutils
+            dos2unix
+            bc
+          install-dir: D:\cygwin
+          add-to-path: true
+          
+      - name: Cache ICU source
+        uses: actions/cache@v4
+        id: cache-icu-source
+        with:
+          path: |
+            icu-source.zip
+            icu-release-77-1
+          key: icu-source-77-1-${{ runner.os }}
+          
+      - name: Build ICU with separate data
+        env:
+          VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
+          WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
+          PATH: ${{ env.PATH }}
+        run: |
+          python build_icu.py --arch x64 --build-type Release
+          
+      - name: Upload ICU build artifacts (separate data)
+        uses: actions/upload-artifact@v4
+        with:
+          name: icu-x64-Release-separate-data
+          path: icu-x64-Release-separate-data.zip
+          retention-days: 30
+
+  build-icu-embedded-data:
+    runs-on: windows-latest
+    name: ICU Build (Embedded Data)
+    
+    steps:
+      - name: Configure git line endings
+        shell: powershell
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+          
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          
+      - name: Install Cygwin with required packages
+        uses: cygwin/cygwin-install-action@master
+        with:
+          platform: x86_64
+          packages: >-
+            bash
+            make
+            gcc-core
+            gcc-g++
+            binutils
+            dos2unix
+            bc
+          install-dir: D:\cygwin
+          add-to-path: true
+          
+      - name: Cache ICU source
+        uses: actions/cache@v4
+        id: cache-icu-source
+        with:
+          path: |
+            icu-source.zip
+            icu-release-77-1
+          key: icu-source-77-1-${{ runner.os }}
+          
+      - name: Build ICU with embedded data
+        env:
+          VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
+          WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
+          PATH: ${{ env.PATH }}
+        run: |
+          python build_icu.py --arch x64 --build-type Release --embed-data
+          
+      - name: Upload ICU build artifacts (embedded data)
+        uses: actions/upload-artifact@v4
+        with:
+          name: icu-x64-Release-static-data
+          path: icu-x64-Release-static-data.zip
+          retention-days: 30

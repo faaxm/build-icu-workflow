@@ -8,13 +8,25 @@ This repository contains a GitHub Actions workflow for building ICU (Internation
 
 ## Architecture
 
-The project centers around a single GitHub Actions workflow (`.github/workflows/build-icu-windows.yml`) that:
+The project provides multiple approaches for building ICU:
+
+### Current Approach: Python-Based Build (`.github/workflows/build-icu-python.yml`)
+A unified Python script (`build_icu.py`) that handles all build logic with GitHub Actions workflows that:
 
 1. **Downloads ICU 77.1 source** from the official Unicode GitHub repository
-2. **Sets up a Windows build environment** with MSVC and Cygwin
-3. **Configures ICU** for static-only builds with minimal components (no samples, tests, or extras)
-4. **Builds and packages** the resulting static libraries and headers
-5. **Uploads artifacts** for distribution
+2. **Sets up Python environment** and dependencies (requests library)
+3. **Sets up Windows build environment** with MSVC and Cygwin
+4. **Executes Python build script** with different configurations
+5. **Uploads packaged artifacts** for distribution
+
+The Python script supports both:
+- **Separate data builds** (`--embed-data` false): Creates .dat files alongside static libraries
+- **Embedded data builds** (`--embed-data` true): Embeds ICU data directly in static libraries
+
+### Legacy Approaches:
+- **Cygwin/MSVC Hybrid** (`.github/workflows/build-icu-windows.yml`) - Original working implementation
+- **Native MSVC** (`.github/workflows/build-icu-windows-native.yml`) - Uses Visual Studio solution files
+- **Static Data Embedding** (`.github/workflows/build-icu-windows-static-data.yml`) - Embeds data in libraries
 
 Key technical details:
 - Uses Cygwin bash environment with MSVC toolchain for compilation
@@ -38,16 +50,32 @@ gh run list
 ```
 
 ### Manual Testing
-The workflow can be triggered via:
-- `workflow_dispatch` (manual trigger)
+The workflows can be triggered via:
 - Push to `master` or `main` branches affecting workflow files or scripts
 - Pull requests to `master` or `main` branches
 
+### Python Script Usage
+```bash
+# Build with separate data files (.dat files)
+python build_icu.py --arch x64 --build-type Release
+
+# Build with embedded data (static libraries)
+python build_icu.py --arch x64 --build-type Release --embed-data
+
+# Debug build
+python build_icu.py --arch x64 --build-type Debug
+
+# Different ICU version
+python build_icu.py --version 76.1 --tag release-76-1
+```
+
 ### Build Output
-The workflow produces:
+The workflows produce:
 - Static libraries in `D:\icu-build\<arch>-<build_type>\lib\`
 - Header files in `D:\icu-build\<arch>-<build_type>\include\`  
-- Packaged artifacts as `icu-<arch>-<build_type>.zip`
+- Packaged artifacts as:
+  - `icu-<arch>-<build_type>-separate-data.zip` (with .dat files)
+  - `icu-<arch>-<build_type>-static-data.zip` (embedded data)
 
 ## Configuration
 
