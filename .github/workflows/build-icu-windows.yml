@@ -17,7 +17,7 @@ env:
   ICU_VERSION: "77.1"
   ICU_ARCH: "x64"
   ICU_BUILD_TYPE: "Release"
-  ICU_BUILD_DIR: "D:\icu-build"
+  ICU_BUILD_DIR: "D:\\icu-build"
   CYGWIN: "winsymlinks:native"
 
 jobs:
