@@ -129,3 +129,11 @@ When the build fails:
 - **Typical build time**: 5-6 minutes for full ICU static library build
 - **Cache effectiveness**: ICU source cache saves ~30 seconds on subsequent runs
 - **Artifact size**: ~15-20MB for complete ICU x64 Release package
+
+## Resources
+**IMPORTANT**: Consult the following resources for examples and documentation. Do additional web searches whenever you are unsure and make sure you have as many sources as possible to back up your ideas/solutions/implementations.
+
+- ICU Project workflow: https://raw.githubusercontent.com/unicode-org/icu/refs/heads/main/.github/workflows/icu4c.yml
+- Build documentation: https://unicode-org.github.io/icu/userguide/icu4c/build.html
+- Qt Docs: https://wiki.qt.io/Compiling-ICU-with-MSVC
+- Qt Docs: https://wiki.qt.io/Compiling-ICU-with-MinGW
