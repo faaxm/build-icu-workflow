@@ -27,12 +27,18 @@ export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g' | sed '
 # We need make, bash, and other build tools, but not the GNU link command
 export PATH="$PATH:/usr/local/bin"
 
-# Add essential tools individually to avoid the link conflict
-# Create temporary aliases or ensure required tools are available
-if ! which make >/dev/null 2>&1; then
-    echo "Adding make to PATH from /usr/bin"
-    export PATH="$PATH:/bin"
-fi
+# Add essential tools back but create a workaround for the link conflict
+# ICU's configure script needs various Unix tools from /usr/bin
+export PATH="$PATH:/usr/bin"
+
+# Create a temporary override for link to ensure Microsoft's linker is used
+# We'll create a temporary directory with a link symlink to the Microsoft linker
+TEMP_BIN_DIR="/tmp/msvc-override"
+mkdir -p "$TEMP_BIN_DIR"
+ln -sf "/cygdrive/c/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64/link.exe" "$TEMP_BIN_DIR/link"
+export PATH="$TEMP_BIN_DIR:$PATH"
+
+echo "Created temporary link override at $TEMP_BIN_DIR/link"
 
 echo "PATH configured for ICU build (avoiding GNU link conflict)"
 echo "MSVC tools prioritized, Cygwin link excluded"
