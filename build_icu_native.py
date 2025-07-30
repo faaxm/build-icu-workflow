@@ -42,7 +42,8 @@ class ICUNativeBuilder:
     def __init__(self, config: BuildConfig):
         self.config = config
         self.workspace = Path.cwd()
-        self.source_dir = self.workspace / f"icu-release-{config.icu_tag}" / "icu4c" / "source"
+        # The GitHub archive creates a directory named "icu-{tag}" not "icu-release-{tag}"
+        self.source_dir = self.workspace / f"icu-{config.icu_tag}" / "icu4c" / "source"
         self.solution_path = self.source_dir / "allinone" / "allinone.sln"
         
     def download_icu_source(self) -> bool:
@@ -190,10 +191,10 @@ class ICUNativeBuilder:
         
         # Possible locations for build output
         possible_paths = [
-            self.workspace / f"icu-release-{self.config.icu_tag}" / "icu4c" / "bin64",
-            self.workspace / f"icu-release-{self.config.icu_tag}" / "icu4c" / "lib64",
-            self.workspace / f"icu-release-{self.config.icu_tag}" / "icu4c" / "bin",
-            self.workspace / f"icu-release-{self.config.icu_tag}" / "icu4c" / "lib",
+            self.workspace / f"icu-{self.config.icu_tag}" / "icu4c" / "bin64",
+            self.workspace / f"icu-{self.config.icu_tag}" / "icu4c" / "lib64",
+            self.workspace / f"icu-{self.config.icu_tag}" / "icu4c" / "bin",
+            self.workspace / f"icu-{self.config.icu_tag}" / "icu4c" / "lib",
             self.source_dir / ".." / ".." / "lib64",
             self.source_dir / ".." / ".." / "bin64",
         ]
@@ -224,8 +225,8 @@ class ICUNativeBuilder:
         data_paths = [
             self.source_dir / "data" / "out",
             self.source_dir / "data" / "out" / "tmp",
-            self.workspace / f"icu-release-{self.config.icu_tag}" / "icu4c" / "data" / "out",
-            self.workspace / f"icu-release-{self.config.icu_tag}" / "icu4c" / "data",
+            self.workspace / f"icu-{self.config.icu_tag}" / "icu4c" / "data" / "out",
+            self.workspace / f"icu-{self.config.icu_tag}" / "icu4c" / "data",
         ]
         
         for data_path in data_paths:
