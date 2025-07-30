@@ -29,11 +29,13 @@ class BuildConfig:
     build_type: str = "Release"
     icu_version: str = "77.1"
     icu_tag: str = "release-77-1"
+    static_data: bool = True  # Enable static data packaging by default
     
     @property
     def artifact_name(self) -> str:
         """Get artifact name."""
-        return f"icu-{self.arch}-{self.build_type}"
+        suffix = "-static-data" if self.static_data else "-separate-data"
+        return f"icu-{self.arch}-{self.build_type}{suffix}"
 
 
 class ICUNativeBuilder:
@@ -140,7 +142,8 @@ class ICUNativeBuilder:
     
     def build_icu_with_msbuild(self) -> bool:
         """Build ICU using MSBuild."""
-        print(f" Building ICU with MSBuild ({self.config.arch} {self.config.build_type})...")
+        data_type = "static" if self.config.static_data else "separate"
+        print(f" Building ICU with MSBuild ({self.config.arch} {self.config.build_type}, {data_type} data)...")
         
         # Build command arguments
         msbuild_args = [
@@ -154,36 +157,88 @@ class ICUNativeBuilder:
             "/verbosity:normal"
         ]
         
+        # Add static data configuration
+        if self.config.static_data:
+            msbuild_args.extend([
+                "/p:PreprocessorDefinitions=U_STATIC_IMPLEMENTATION;%(PreprocessorDefinitions)"
+            ])
+        
         print(f" Running: {' '.join(msbuild_args)}")
         
         try:
-            # Build the complete solution first
-            result = subprocess.run(msbuild_args, cwd=self.workspace, capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f" Initial ICU build failed with exit code {result.returncode}")
-                print(f"STDOUT: {result.stdout}")
-                print(f"STDERR: {result.stderr}")
-                return False
+            if self.config.static_data:
+                # For static data, we need to build specific projects in order
+                return self._build_static_data_libraries(msbuild_args)
+            else:
+                # For separate data, use the standard build process
+                return self._build_separate_data_libraries(msbuild_args)
                 
-            print(" Initial ICU build completed successfully")
-            
-            # Build the full ICU data library (not just stubdata)
-            print(" Building full ICU data library...")
-            makedata_args = msbuild_args + ["/target:MakeData"]
-            
-            result = subprocess.run(makedata_args, cwd=self.workspace, capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f" ICU data build failed with exit code {result.returncode}")
-                print(f"STDOUT: {result.stdout}")
-                print(f"STDERR: {result.stderr}")
-                return False
-                
-            print(" Full ICU data build completed successfully")
-            return True
-            
         except Exception as e:
             print(f" Build failed: {e}")
             return False
+    
+    def _build_static_data_libraries(self, base_args: list) -> bool:
+        """Build ICU with static data embedded in libraries."""
+        print(" Building ICU with static data packaging...")
+        
+        # Build core libraries first
+        core_projects = ["common", "i18n", "io"]
+        for project in core_projects:
+            print(f" Building {project} library...")
+            project_args = base_args.copy()
+            project_args.extend([f"/target:{project}"])
+            
+            result = subprocess.run(project_args, cwd=self.workspace, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f" {project} build failed with exit code {result.returncode}")
+                print(f"STDERR: {result.stderr}")
+                return False
+            print(f" {project} library completed successfully")
+        
+        # Build stubdata as static library with embedded data
+        print(" Building static data library...")
+        stubdata_args = base_args.copy()
+        stubdata_args.extend([
+            "/target:stubdata",
+            "/p:ConfigurationType=StaticLibrary"
+        ])
+        
+        result = subprocess.run(stubdata_args, cwd=self.workspace, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f" Static data library build failed with exit code {result.returncode}")
+            print(f"STDERR: {result.stderr}")
+            return False
+            
+        print(" Static data library completed successfully")
+        return True
+    
+    def _build_separate_data_libraries(self, base_args: list) -> bool:
+        """Build ICU with separate data files."""
+        print(" Building ICU with separate data files...")
+        
+        # Build the complete solution first
+        result = subprocess.run(base_args, cwd=self.workspace, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f" Initial ICU build failed with exit code {result.returncode}")
+            print(f"STDOUT: {result.stdout}")
+            print(f"STDERR: {result.stderr}")
+            return False
+            
+        print(" Initial ICU build completed successfully")
+        
+        # Build the full ICU data library (not just stubdata)
+        print(" Building full ICU data library...")
+        makedata_args = base_args + ["/target:MakeData"]
+        
+        result = subprocess.run(makedata_args, cwd=self.workspace, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f" ICU data build failed with exit code {result.returncode}")
+            print(f"STDOUT: {result.stdout}")
+            print(f"STDERR: {result.stderr}")
+            return False
+            
+        print(" Full ICU data build completed successfully")
+        return True
     
     def locate_build_artifacts(self) -> dict:
         """Locate build artifacts in various possible locations."""
@@ -301,6 +356,7 @@ class ICUNativeBuilder:
         
         # Create build info file
         build_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
+        data_packaging = "Static (embedded in libraries)" if self.config.static_data else "Separate (.dat files)"
         build_info = f"""ICU Version: {self.config.icu_version}
 Architecture: {self.config.arch}
 Build Type: {self.config.build_type}
@@ -309,8 +365,8 @@ Build Environment: Native Windows (MSBuild)
 Build Date: {build_date}
 Static Libraries: Yes
 Shared Libraries: No
-Data Library: Complete (built with MakeData target)
-Data Packaging: Built-in DLL + .dat files
+Data Packaging: {data_packaging}
+Static Data Implementation: {'U_STATIC_IMPLEMENTATION' if self.config.static_data else 'Not used'}
 """
         
         with open(artifact_dir / "BUILD_INFO.txt", "w", encoding="utf-8") as f:
@@ -360,26 +416,45 @@ Data Packaging: Built-in DLL + .dat files
             print(" Headers not found")
             return False
         
-        # Check data files
-        data_dir = artifact_dir / "data"
-        if data_dir.exists():
-            dat_files = list(data_dir.glob("*.dat"))
-            if dat_files:
-                print(" ICU data files:")
-                for dat_file in dat_files:
-                    size_mb = dat_file.stat().st_size / 1024 / 1024
-                    print(f"  {dat_file.name} ({size_mb:.2f} MB)")
+        # Check data files or static data
+        if self.config.static_data:
+            # For static data, check that stubdata library exists and has significant size
+            data_lib = None
+            for lib_file in lib_files:
+                if "icudt" in lib_file.name.lower() or "stubdata" in lib_file.name.lower():
+                    data_lib = lib_file
+                    break
+            
+            if data_lib:
+                size_mb = data_lib.stat().st_size / 1024 / 1024
+                print(f" Static data library: {data_lib.name} ({size_mb:.2f} MB)")
+                if size_mb < 1.0:
+                    print("  Warning: Data library seems small - may not contain full ICU data")
             else:
-                print("  Warning: No data files found")
+                print("  Warning: No ICU data library found")
+        else:
+            # For separate data, check for .dat files
+            data_dir = artifact_dir / "data"
+            if data_dir.exists():
+                dat_files = list(data_dir.glob("*.dat"))
+                if dat_files:
+                    print(" ICU data files:")
+                    for dat_file in dat_files:
+                        size_mb = dat_file.stat().st_size / 1024 / 1024
+                        print(f"  {dat_file.name} ({size_mb:.2f} MB)")
+                else:
+                    print("  Warning: No data files found")
         
         print(f" Build verification completed - Total library size: {total_size:.2f} MB")
         return True
     
     def build(self) -> bool:
         """Execute the complete build process."""
+        data_mode = "static (embedded)" if self.config.static_data else "separate (.dat files)"
         print(f" Starting ICU {self.config.icu_version} native MSVC build...")
         print(f"   Architecture: {self.config.arch}")
         print(f"   Build Type: {self.config.build_type}")
+        print(f"   Data Packaging: {data_mode}")
         print()
         
         steps = [
@@ -414,6 +489,8 @@ def main():
                        help="Build type")
     parser.add_argument("--version", default="77.1", help="ICU version")
     parser.add_argument("--tag", default="release-77-1", help="ICU release tag")
+    parser.add_argument("--no-static-data", action="store_true",
+                       help="Build with separate data files instead of embedded static data")
     
     args = parser.parse_args()
     
@@ -421,7 +498,8 @@ def main():
         arch=args.arch,
         build_type=args.build_type,
         icu_version=args.version,
-        icu_tag=args.tag
+        icu_tag=args.tag,
+        static_data=not args.no_static_data  # Default to static data unless --no-static-data is specified
     )
     
     builder = ICUNativeBuilder(config)
