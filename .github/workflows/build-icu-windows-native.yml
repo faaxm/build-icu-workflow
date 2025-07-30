@@ -171,6 +171,7 @@ jobs:
           New-Item -ItemType Directory -Path "$artifactName\lib" -Force
           New-Item -ItemType Directory -Path "$artifactName\include" -Force
           New-Item -ItemType Directory -Path "$artifactName\bin" -Force
+          New-Item -ItemType Directory -Path "$artifactName\data" -Force
           
           # Copy libraries (look for .lib files)
           $libFound = $false
@@ -220,6 +221,36 @@ jobs:
                 $binFound = $true
               }
             }
+          }
+          
+          # Copy ICU data files (.dat files created by MakeData target)
+          $dataPaths = @(
+            "icu-release-77-1\icu4c\source\data\out\",
+            "icu-release-77-1\icu4c\source\data\out\tmp\",
+            "icu-release-77-1\icu4c\data\out\",
+            "icu-release-77-1\icu4c\data\"
+          )
+          
+          $dataFound = $false
+          foreach ($dataPath in $dataPaths) {
+            if (Test-Path $dataPath) {
+              Write-Host "Checking data path: $dataPath"
+              $datFiles = Get-ChildItem "$dataPath\*.dat" -ErrorAction SilentlyContinue
+              if ($datFiles) {
+                Write-Host "Found data files in: $dataPath"
+                $datFiles | ForEach-Object {
+                  Write-Host "  Copying: $($_.Name) ($([math]::Round($_.Length/1MB, 2)) MB)"
+                  Copy-Item $_.FullName -Destination "$artifactName\data\" -Force
+                }
+                $dataFound = $true
+              }
+            }
+          }
+          
+          if ($dataFound) {
+            Write-Host "ICU data files copied successfully"
+          } else {
+            Write-Host "WARNING: No .dat files found - ICU data may be incomplete"
           }
           
           # Create build info file
@@ -281,6 +312,15 @@ jobs:
           } else {
             Write-Host "ERROR: Headers not found"
             exit 1
+          }
+          
+          if (Test-Path "$artifactName\data") {
+            Write-Host "ICU data files:"
+            Get-ChildItem "$artifactName\data\*.dat" -ErrorAction SilentlyContinue | ForEach-Object { 
+              Write-Host "  $($_.Name) ($([math]::Round($_.Length/1MB, 2)) MB)"
+            }
+          } else {
+            Write-Host "WARNING: No data directory found"
           }
           
           Write-Host "=== Native MSVC build completed successfully ==="
