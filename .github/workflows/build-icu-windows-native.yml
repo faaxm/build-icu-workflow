@@ -104,16 +104,15 @@ jobs:
           Write-Host "Platform: $platform"
           Write-Host "Configuration: $configuration"
           
-          # Build static libraries only by targeting specific projects
-          # Skip UWP projects and focus on core static libraries
+          # Build the complete solution - ICU will build static libraries by default
+          # Skip UWP projects and focus on core libraries
           msbuild $solutionPath `
             /p:Configuration=$configuration `
             /p:Platform=$platform `
             /p:SkipUWP=true `
             /p:UseDebugLibraries=$($configuration -eq 'Debug') `
             /m `
-            /verbosity:normal `
-            /target:common,i18n,io,tu,uc
+            /verbosity:normal
             
           if ($LASTEXITCODE -ne 0) {
             Write-Host "ERROR: MSBuild failed with exit code $LASTEXITCODE"
@@ -129,14 +128,16 @@ jobs:
           $configuration = "${{ matrix.build_type }}"
           $artifactName = "icu-$platform-$configuration"
           
-          # Look for build output in various possible locations
+          # Look for build output in various possible locations (native MSVC build)
           $possiblePaths = @(
-            "icu-release-77-1\icu4c\bin\",
             "icu-release-77-1\icu4c\bin64\",
-            "icu-release-77-1\icu4c\lib\",
             "icu-release-77-1\icu4c\lib64\",
-            "icu-release-77-1\icu4c\source\lib\",
-            "icu-release-77-1\icu4c\source\bin\"
+            "icu-release-77-1\icu4c\bin\",
+            "icu-release-77-1\icu4c\lib\",
+            "icu-release-77-1\icu4c\source\stubdata\..\..\..\lib64\",
+            "icu-release-77-1\icu4c\source\common\..\..\..\lib64\",
+            "icu-release-77-1\icu4c\source\i18n\..\..\..\lib64\",
+            "icu-release-77-1\icu4c\source\io\..\..\..\lib64\"
           )
           
           Write-Host "Searching for build artifacts..."
