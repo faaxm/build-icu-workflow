@@ -1,0 +1,65 @@
+name: Build ICU with Python Script (Native MSVC)
+
+on:
+  push:
+    branches: [ master, main ]
+    paths:
+      - '.github/workflows/build-icu-python-native.yml'
+      - 'build_icu_native.py'
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - '.github/workflows/build-icu-python-native.yml'
+      - 'build_icu_native.py'
+
+jobs:
+  build-icu-native:
+    runs-on: windows-latest
+    name: ICU Native MSVC Build
+    
+    strategy:
+      matrix:
+        arch: [x64]
+        build_type: [Release]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+          
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+          
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+          
+      - name: Cache ICU source
+        uses: actions/cache@v4
+        id: cache-icu-source
+        with:
+          path: |
+            icu-source.zip
+            icu-release-77-1
+          key: icu-source-77-1-${{ runner.os }}
+          
+      - name: Build ICU with native MSVC
+        run: |
+          python build_icu_native.py --arch ${{ matrix.arch }} --build-type ${{ matrix.build_type }}
+          
+      - name: Upload ICU build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: icu-native-${{ matrix.arch }}-${{ matrix.build_type }}
+          path: icu-${{ matrix.arch }}-${{ matrix.build_type }}.zip
+          retention-days: 30
