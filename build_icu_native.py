@@ -160,7 +160,7 @@ class ICUNativeBuilder:
         # Add static data configuration
         if self.config.static_data:
             msbuild_args.extend([
-                "/p:PreprocessorDefinitions=U_STATIC_IMPLEMENTATION;%(PreprocessorDefinitions)"
+                "/p:PreprocessorDefinitions=U_STATIC_IMPLEMENTATION"
             ])
         
         print(f" Running: {' '.join(msbuild_args)}")
