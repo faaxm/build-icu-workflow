@@ -109,15 +109,6 @@ The current working configuration (`8cc99c0` and later) succeeds because:
 4. **Specific Shell Invocation**: `D:\cygwin\bin\bash.exe --login -o igncr {0}`
 5. **Environment Variable Passing**: Explicit passing of `VCINSTALLDIR`, `WindowsSdkBinPath`, `PATH`
 
-### What NOT to Change
-
-**DO NOT** attempt these "optimizations" - they break the build:
-- ❌ Centralizing PATH setup into external scripts
-- ❌ Removing the matrix strategy (even for single values)
-- ❌ Changing Cygwin install location from `D:\cygwin`
-- ❌ Modifying the shell invocation pattern
-- ❌ Changing environment variable references from `matrix.*` to `env.*`
-
 ### Common Failure Patterns
 
 1. **"link.exe is not a valid linker"**: GNU link vs Microsoft link.exe conflict
