@@ -13,19 +13,20 @@ on:
       - 'scripts/**'
       - '.github/workflows/build-icu-windows.yml'
 
+env:
+  ICU_VERSION: "77.1"
+  ICU_ARCH: "x64"
+  ICU_BUILD_TYPE: "Release"
+  ICU_BUILD_DIR: "D:\icu-build"
+  CYGWIN: "winsymlinks:native"
+
 jobs:
   build-icu-windows:
     runs-on: windows-latest
     
-    # Set default shell and line ending handling
     defaults:
       run:
-        shell: bash
-    
-    strategy:
-      matrix:
-        arch: [x64]
-        build_type: [Release]
+        shell: C:\cygwin\bin\bash.exe --login -eo pipefail {0}
     
     steps:
       - name: Configure git line endings
@@ -40,21 +41,15 @@ jobs:
       - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: ${{ matrix.arch }}
+          arch: ${{ env.ICU_ARCH }}
           
       - name: Install Cygwin with required packages
         uses: cygwin/cygwin-install-action@master
         with:
           platform: x86_64
-          packages: >-
-            bash
-            make
-            gcc-core
-            gcc-g++
-            binutils
-            dos2unix
-          install-dir: D:\cygwin
-          add-to-path: true
+          packages: bash make gcc-core gcc-g++ binutils dos2unix
+          install-dir: C:\cygwin
+          add-to-path: false
           
       - name: Cache ICU source
         uses: actions/cache@v4
@@ -63,217 +58,112 @@ jobs:
           path: |
             icu-source.zip
             icu-release-77-1
-          key: icu-source-77-1-${{ runner.os }}
+          key: icu-source-${{ env.ICU_VERSION }}-${{ runner.os }}
           
-      - name: Download ICU 77.1 source
+      - name: Download ICU ${{ env.ICU_VERSION }} source
         if: steps.cache-icu-source.outputs.cache-hit != 'true'
         shell: powershell
         run: |
           $url = "https://github.com/unicode-org/icu/archive/refs/tags/release-77-1.zip"
-          $output = "icu-source.zip"
-          Write-Host "Downloading ICU source from: $url"
-          Invoke-WebRequest -Uri $url -OutFile $output
-          Write-Host "Extracting ICU source..."
-          Expand-Archive -Path $output -DestinationPath . -Force
-          Write-Host "ICU source extracted successfully"
-          Write-Host "Verifying directory structure:"
-          if (Test-Path "icu-release-77-1\icu4c\source") {
-            Write-Host "Found icu4c/source directory"
-            Get-ChildItem "icu-release-77-1\icu4c\source" | Select-Object -First 5 Name
-          } else {
-            Write-Host "icu4c/source directory not found"
-            Write-Host "Available directories:"
-            Get-ChildItem "icu-release-77-1" | Select-Object Name
-          }
+          Write-Host "Downloading ICU $version from: $url"
+          Invoke-WebRequest -Uri $url -OutFile "icu-source.zip"
+          Expand-Archive -Path "icu-source.zip" -DestinationPath . -Force
+          Write-Host "✓ ICU source extracted successfully"
           
       - name: Prepare ICU source for Windows build
-        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         run: |
           cd "$GITHUB_WORKSPACE"
-          echo "Current working directory: $(pwd)"
-          echo "Directory contents:"
-          /bin/ls -la
+          ICU_SRC_DIR="icu-release-77-1/icu4c/source"
           
-          if [ -d "icu-release-77-1/icu4c/source" ]; then
-            echo "Found ICU source directory"
-            cd "icu-release-77-1/icu4c/source"
+          if [ -d "$ICU_SRC_DIR" ]; then
+            echo "✓ Found ICU source directory"
+            cd "$ICU_SRC_DIR"
             
             echo "Converting line endings and setting permissions..."
-            # Convert line endings to Unix format to prevent build issues
-            /usr/bin/find . -name "*.sh" -o -name "*.ac" -o -name "*.in" | /usr/bin/xargs /usr/bin/dos2unix 2>/dev/null || true
-            /bin/chmod +x runConfigureICU configure install-sh 2>/dev/null || true
-            
-            echo "ICU source preparation completed"
+            find . -name "*.sh" -o -name "*.ac" -o -name "*.in" | xargs dos2unix 2>/dev/null || true
+            chmod +x runConfigureICU configure install-sh 2>/dev/null || true
+            echo "✓ ICU source preparation completed"
           else
-            echo "ICU source directory not found!"
-            echo "Available directories:"
-            /usr/bin/find . -maxdepth 2 -type d
+            echo "✗ ICU source directory not found: $ICU_SRC_DIR"
+            find . -maxdepth 2 -type d
             exit 1
           fi
           
       - name: Configure ICU build
-        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         env:
-          CYGWIN: winsymlinks:native
           VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
           WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
-          PATH: ${{ env.PATH }}
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
-          echo "Current directory: $(pwd)"
-          echo "Available files:"
-          /bin/ls -la | /usr/bin/head -10
+          # Setup build environment using our script
+          source "$GITHUB_WORKSPACE/scripts/setup-build-env.sh" "${{ env.ICU_ARCH }}" "${{ env.ICU_BUILD_TYPE }}"
           
-          # Ensure MSVC tools are in PATH before Cygwin tools
-          # Use MSVC environment variables set by msvc-dev-cmd action
-          if [ -n "$VCINSTALLDIR" ]; then
-            # Convert Windows path to Cygwin path and expand wildcard
-            VCINSTALLDIR_UNIX=$(cygpath -u "$VCINSTALLDIR")
-            MSVC_BIN_PATH=$(find "${VCINSTALLDIR_UNIX}Tools/MSVC" -maxdepth 1 -type d -name "*" | head -1)/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
-            
-            if [ -d "$MSVC_BIN_PATH" ]; then
-              export PATH="$MSVC_BIN_PATH:$PATH"
-              echo "Added MSVC tools to PATH: $MSVC_BIN_PATH"
-            else
-              echo "Warning: MSVC bin path not found: $MSVC_BIN_PATH"
-            fi
-          fi
+          # Configure ICU build
+          BUILD_PREFIX="/cygdrive/$(echo '${{ env.ICU_BUILD_DIR }}' | sed 's|\\|/|g' | sed 's|:|/|')/${{ env.ICU_ARCH }}-${{ env.ICU_BUILD_TYPE }}"
+          echo "Configuring ICU for ${{ env.ICU_ARCH }} ${{ env.ICU_BUILD_TYPE }} build..."
+          echo "Build prefix: $BUILD_PREFIX"
           
-          # Add Windows SDK tools to PATH
-          if [ -n "$WindowsSdkBinPath" ]; then
-            SDK_BIN_PATH=$(cygpath -u "$WindowsSdkBinPath")
-            if [ -d "$SDK_BIN_PATH" ]; then
-              export PATH="$SDK_BIN_PATH:$PATH"
-              echo "Added Windows SDK tools to PATH: $SDK_BIN_PATH"
-            fi
-          fi
-          
-          # Remove Cygwin's link from PATH to avoid conflict with MSVC link.exe
-          export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g')
-          # Add /usr/bin back at the end (after MSVC tools)
-          export PATH="$PATH:/usr/bin"
-          
-          # Verify critical tools are available and show their full paths
-          echo "Checking for required tools:"
-          echo "cl.exe location: $(which cl 2>/dev/null || echo 'NOT FOUND')"
-          echo "link.exe location: $(which link 2>/dev/null || echo 'NOT FOUND')"
-          
-          # Test that we have the Microsoft linker, not Cygwin's link
-          if which link >/dev/null 2>&1; then
-            echo "Testing linker type:"
-            link /? 2>&1 | head -2 || echo "Link test failed"
-          fi
-          
-          # Set build configuration
-          BUILD_TYPE="${{ matrix.build_type }}"
-          if [ "$BUILD_TYPE" = "Debug" ]; then
-            export CPPFLAGS="-MDd"
-            export CFLAGS="-MDd"
-            export CXXFLAGS="-MDd /std:c++17"
-          else
-            export CPPFLAGS="-MD"
-            export CFLAGS="-MD" 
-            export CXXFLAGS="-MD /std:c++17"
-          fi
-          
-          echo "Configuring ICU for ${{ matrix.arch }} ${{ matrix.build_type }} build..."
-          echo "Running: bash ./runConfigureICU Cygwin/MSVC --enable-static --disable-shared --disable-samples --disable-tests --disable-extras --prefix=/cygdrive/d/icu-build/${{ matrix.arch }}-${{ matrix.build_type }}"
-          
-          /bin/bash ./runConfigureICU Cygwin/MSVC \
+          bash ./runConfigureICU Cygwin/MSVC \
             --enable-static \
             --disable-shared \
             --disable-samples \
             --disable-tests \
             --disable-extras \
-            --prefix="/cygdrive/d/icu-build/${{ matrix.arch }}-${{ matrix.build_type }}"
+            --prefix="$BUILD_PREFIX"
             
       - name: Build ICU
-        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         env:
-          CYGWIN: winsymlinks:native
           VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
           WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
-          PATH: ${{ env.PATH }}
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
-          # Ensure MSVC tools are in PATH before Cygwin tools
-          if [ -n "$VCINSTALLDIR" ]; then
-            VCINSTALLDIR_UNIX=$(cygpath -u "$VCINSTALLDIR")
-            MSVC_BIN_PATH=$(find "${VCINSTALLDIR_UNIX}Tools/MSVC" -maxdepth 1 -type d -name "*" | head -1)/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
-            if [ -d "$MSVC_BIN_PATH" ]; then
-              export PATH="$MSVC_BIN_PATH:$PATH"
-            fi
-          fi
-          
-          # Remove Cygwin's link from PATH to avoid conflict with MSVC link.exe
-          export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g')
-          export PATH="$PATH:/usr/bin"
+          # Setup build environment
+          source "$GITHUB_WORKSPACE/scripts/setup-build-env.sh" "${{ env.ICU_ARCH }}" "${{ env.ICU_BUILD_TYPE }}"
           
           echo "Building ICU libraries..."
-          /usr/bin/make -j$(/usr/bin/nproc)
+          make -j$(nproc)
           
       - name: Install ICU
-        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         env:
-          CYGWIN: winsymlinks:native
           VCINSTALLDIR: ${{ env.VCINSTALLDIR }}
           WindowsSdkBinPath: ${{ env.WindowsSdkBinPath }}
-          PATH: ${{ env.PATH }}
         run: |
           cd "$GITHUB_WORKSPACE/icu-release-77-1/icu4c/source"
           
-          # Ensure MSVC tools are in PATH before Cygwin tools
-          if [ -n "$VCINSTALLDIR" ]; then
-            VCINSTALLDIR_UNIX=$(cygpath -u "$VCINSTALLDIR")
-            MSVC_BIN_PATH=$(find "${VCINSTALLDIR_UNIX}Tools/MSVC" -maxdepth 1 -type d -name "*" | head -1)/bin/Host${{ matrix.arch == 'x64' && 'x64/x64' || 'x86/x86' }}
-            if [ -d "$MSVC_BIN_PATH" ]; then
-              export PATH="$MSVC_BIN_PATH:$PATH"
-            fi
-          fi
-          
-          # Remove Cygwin's link from PATH to avoid conflict with MSVC link.exe
-          export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g')
-          export PATH="$PATH:/usr/bin"
+          # Setup build environment
+          source "$GITHUB_WORKSPACE/scripts/setup-build-env.sh" "${{ env.ICU_ARCH }}" "${{ env.ICU_BUILD_TYPE }}"
           
           echo "Installing ICU to prefix directory..."
-          /usr/bin/make install
+          make install
           
       - name: Package ICU artifacts
         shell: powershell
         run: |
-          $buildPath = "D:\icu-build\${{ matrix.arch }}-${{ matrix.build_type }}"
-          $artifactName = "icu-${{ matrix.arch }}-${{ matrix.build_type }}"
+          $buildPath = "${{ env.ICU_BUILD_DIR }}\${{ env.ICU_ARCH }}-${{ env.ICU_BUILD_TYPE }}"
+          $artifactName = "icu-${{ env.ICU_ARCH }}-${{ env.ICU_BUILD_TYPE }}"
           
-          Write-Host "Packaging ICU build artifacts from: $buildPath"
+          Write-Host "📦 Packaging ICU build artifacts from: $buildPath"
           
           # Create artifact directory structure
-          New-Item -ItemType Directory -Path $artifactName -Force
-          New-Item -ItemType Directory -Path "$artifactName\lib" -Force
-          New-Item -ItemType Directory -Path "$artifactName\include" -Force
-          New-Item -ItemType Directory -Path "$artifactName\bin" -Force
-          
-          # Copy libraries
-          if (Test-Path "$buildPath\lib") {
-            Copy-Item -Path "$buildPath\lib\*" -Destination "$artifactName\lib\" -Recurse -Force
+          @('lib', 'include', 'bin') | ForEach-Object {
+            New-Item -ItemType Directory -Path "$artifactName\$_" -Force | Out-Null
           }
           
-          # Copy headers
-          if (Test-Path "$buildPath\include") {
-            Copy-Item -Path "$buildPath\include\*" -Destination "$artifactName\include\" -Recurse -Force
+          # Copy artifacts
+          @('lib', 'include', 'bin') | ForEach-Object {
+            if (Test-Path "$buildPath\$_") {
+              Copy-Item -Path "$buildPath\$_\*" -Destination "$artifactName\$_\" -Recurse -Force
+              Write-Host "✓ Copied $_"
+            }
           }
           
-          # Copy tools/binaries
-          if (Test-Path "$buildPath\bin") {
-            Copy-Item -Path "$buildPath\bin\*" -Destination "$artifactName\bin\" -Recurse -Force
-          }
-          
-          # Create build info file
+          # Create build info
           @"
-          ICU Version: 77.1
-          Architecture: ${{ matrix.arch }}
-          Build Type: ${{ matrix.build_type }}
+          ICU Version: ${{ env.ICU_VERSION }}
+          Architecture: ${{ env.ICU_ARCH }}
+          Build Type: ${{ env.ICU_BUILD_TYPE }}
           Compiler: MSVC (Visual Studio 2022)
           Build Environment: Cygwin
           Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
@@ -281,41 +171,43 @@ jobs:
           Shared Libraries: No
           "@ | Out-File -FilePath "$artifactName\BUILD_INFO.txt" -Encoding UTF8
           
-          # Compress artifacts
           Compress-Archive -Path $artifactName -DestinationPath "$artifactName.zip" -Force
+          Write-Host "✓ Created $artifactName.zip"
           
       - name: Upload ICU build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: icu-windows-${{ matrix.arch }}-${{ matrix.build_type }}
-          path: icu-${{ matrix.arch }}-${{ matrix.build_type }}.zip
+          name: icu-windows-${{ env.ICU_ARCH }}-${{ env.ICU_BUILD_TYPE }}
+          path: icu-${{ env.ICU_ARCH }}-${{ env.ICU_BUILD_TYPE }}.zip
           retention-days: 30
           
       - name: Verify build output
-        shell: D:\cygwin\bin\bash.exe --login -o igncr {0}
         run: |
           echo "=== Build Verification ==="
-          echo "Architecture: ${{ matrix.arch }}"
-          echo "Build Type: ${{ matrix.build_type }}"
+          echo "ICU Version: ${{ env.ICU_VERSION }}"
+          echo "Architecture: ${{ env.ICU_ARCH }}"
+          echo "Build Type: ${{ env.ICU_BUILD_TYPE }}"
           
-          BUILD_PATH="/cygdrive/d/icu-build/${{ matrix.arch }}-${{ matrix.build_type }}"
+          BUILD_PATH="/cygdrive/$(echo '${{ env.ICU_BUILD_DIR }}' | sed 's|\\|/|g' | sed 's|:|/|')/${{ env.ICU_ARCH }}-${{ env.ICU_BUILD_TYPE }}"
           
           if [ -d "$BUILD_PATH/lib" ]; then
-            echo "Static libraries built:"
-            ls -la "$BUILD_PATH/lib/"*.lib 2>/dev/null || echo "No .lib files found"
-            ls -la "$BUILD_PATH/lib/"*.a 2>/dev/null || echo "No .a files found"
+            echo "✓ Static libraries built:"
+            ls -la "$BUILD_PATH/lib/"*.lib 2>/dev/null || echo "  No .lib files found"
+            ls -la "$BUILD_PATH/lib/"*.a 2>/dev/null || echo "  No .a files found"
+            echo "  Library count: $(ls "$BUILD_PATH/lib/" | wc -l)"
           else
-            echo "ERROR: lib directory not found at $BUILD_PATH/lib"
+            echo "✗ ERROR: lib directory not found at $BUILD_PATH/lib"
             exit 1
           fi
           
           if [ -d "$BUILD_PATH/include/unicode" ]; then
-            echo "Header files installed:"
-            ls "$BUILD_PATH/include/unicode/" | head -10
-            echo "... (showing first 10 header files)"
+            echo "✓ Header files installed:"
+            echo "  Header count: $(ls "$BUILD_PATH/include/unicode/" | wc -l)"
+            ls "$BUILD_PATH/include/unicode/" | head -5
+            echo "  ... (showing first 5 header files)"
           else
-            echo "ERROR: Headers not found at $BUILD_PATH/include/unicode"
+            echo "✗ ERROR: Headers not found at $BUILD_PATH/include/unicode"
             exit 1
           fi
           
-          echo "=== Build completed successfully ==="
+          echo "✅ Build completed successfully"

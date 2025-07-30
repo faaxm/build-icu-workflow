@@ -6,7 +6,9 @@
       "Bash(gh run view:*)",
       "Bash(gh run list:*)",
       "Bash(ls:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
