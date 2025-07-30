@@ -166,79 +166,37 @@ class ICUNativeBuilder:
         print(f" Running: {' '.join(msbuild_args)}")
         
         try:
-            if self.config.static_data:
-                # For static data, we need to build specific projects in order
-                return self._build_static_data_libraries(msbuild_args)
+            # Build the complete solution first
+            result = subprocess.run(msbuild_args, cwd=self.workspace, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f" Initial ICU build failed with exit code {result.returncode}")
+                print(f"STDOUT: {result.stdout}")
+                print(f"STDERR: {result.stderr}")
+                return False
+                
+            print(" Initial ICU build completed successfully")
+            
+            if not self.config.static_data:
+                # For separate data, build the full ICU data library (not just stubdata)
+                print(" Building full ICU data library...")
+                makedata_args = msbuild_args + ["/target:MakeData"]
+                
+                result = subprocess.run(makedata_args, cwd=self.workspace, capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(f" ICU data build failed with exit code {result.returncode}")
+                    print(f"STDOUT: {result.stdout}")
+                    print(f"STDERR: {result.stderr}")
+                    return False
+                    
+                print(" Full ICU data build completed successfully")
             else:
-                # For separate data, use the standard build process
-                return self._build_separate_data_libraries(msbuild_args)
+                print(" Static data packaging: ICU data embedded in libraries")
+                
+            return True
                 
         except Exception as e:
             print(f" Build failed: {e}")
             return False
-    
-    def _build_static_data_libraries(self, base_args: list) -> bool:
-        """Build ICU with static data embedded in libraries."""
-        print(" Building ICU with static data packaging...")
-        
-        # Build core libraries first
-        core_projects = ["common", "i18n", "io"]
-        for project in core_projects:
-            print(f" Building {project} library...")
-            project_args = base_args.copy()
-            project_args.extend([f"/target:{project}"])
-            
-            result = subprocess.run(project_args, cwd=self.workspace, capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f" {project} build failed with exit code {result.returncode}")
-                print(f"STDERR: {result.stderr}")
-                return False
-            print(f" {project} library completed successfully")
-        
-        # Build stubdata as static library with embedded data
-        print(" Building static data library...")
-        stubdata_args = base_args.copy()
-        stubdata_args.extend([
-            "/target:stubdata",
-            "/p:ConfigurationType=StaticLibrary"
-        ])
-        
-        result = subprocess.run(stubdata_args, cwd=self.workspace, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f" Static data library build failed with exit code {result.returncode}")
-            print(f"STDERR: {result.stderr}")
-            return False
-            
-        print(" Static data library completed successfully")
-        return True
-    
-    def _build_separate_data_libraries(self, base_args: list) -> bool:
-        """Build ICU with separate data files."""
-        print(" Building ICU with separate data files...")
-        
-        # Build the complete solution first
-        result = subprocess.run(base_args, cwd=self.workspace, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f" Initial ICU build failed with exit code {result.returncode}")
-            print(f"STDOUT: {result.stdout}")
-            print(f"STDERR: {result.stderr}")
-            return False
-            
-        print(" Initial ICU build completed successfully")
-        
-        # Build the full ICU data library (not just stubdata)
-        print(" Building full ICU data library...")
-        makedata_args = base_args + ["/target:MakeData"]
-        
-        result = subprocess.run(makedata_args, cwd=self.workspace, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f" ICU data build failed with exit code {result.returncode}")
-            print(f"STDOUT: {result.stdout}")
-            print(f"STDERR: {result.stderr}")
-            return False
-            
-        print(" Full ICU data build completed successfully")
-        return True
     
     def locate_build_artifacts(self) -> dict:
         """Locate build artifacts in various possible locations."""
