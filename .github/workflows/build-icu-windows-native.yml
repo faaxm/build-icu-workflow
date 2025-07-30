@@ -115,11 +115,27 @@ jobs:
             /verbosity:normal
             
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: MSBuild failed with exit code $LASTEXITCODE"
+            Write-Host "ERROR: Initial ICU build failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
           }
           
-          Write-Host "ICU build completed successfully"
+          Write-Host "Initial ICU build completed successfully"
+          
+          # Build the full ICU data library (not just stubdata)
+          Write-Host "Building full ICU data library..."
+          msbuild $solutionPath `
+            /p:Configuration=$configuration `
+            /p:Platform=$platform `
+            /p:SkipUWP=true `
+            /target:MakeData `
+            /verbosity:normal
+            
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: ICU data build failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          
+          Write-Host "Full ICU data build completed successfully"
           
       - name: Locate and copy build artifacts
         shell: powershell
@@ -128,7 +144,7 @@ jobs:
           $configuration = "${{ matrix.build_type }}"
           $artifactName = "icu-$platform-$configuration"
           
-          # Look for build output in various possible locations (native MSVC build)
+          # Look for build output in various possible locations (native MSVC build with MakeData)
           $possiblePaths = @(
             "icu-release-77-1\icu4c\bin64\",
             "icu-release-77-1\icu4c\lib64\",
@@ -137,7 +153,9 @@ jobs:
             "icu-release-77-1\icu4c\source\stubdata\..\..\..\lib64\",
             "icu-release-77-1\icu4c\source\common\..\..\..\lib64\",
             "icu-release-77-1\icu4c\source\i18n\..\..\..\lib64\",
-            "icu-release-77-1\icu4c\source\io\..\..\..\lib64\"
+            "icu-release-77-1\icu4c\source\io\..\..\..\lib64\",
+            "icu-release-77-1\icu4c\source\data\..\..\..\lib64\",
+            "icu-release-77-1\icu4c\source\data\..\..\..\bin64\"
           )
           
           Write-Host "Searching for build artifacts..."
@@ -214,6 +232,8 @@ jobs:
           Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
           Static Libraries: Yes
           Shared Libraries: No
+          Data Library: Complete (built with MakeData target)
+          Data Packaging: Built-in DLL + .dat files
           "@ | Out-File -FilePath "$artifactName\BUILD_INFO.txt" -Encoding UTF8
           
           # Compress artifacts
