@@ -80,3 +80,61 @@ The ICU build is configured with:
 - References to automated generation
 
 Use standard, professional commit messages that describe the actual changes made.
+
+## Critical Build Environment Insights
+
+**⚠️ IMPORTANT**: The ICU+Cygwin+MSVC build environment is extremely fragile. The current working configuration should be preserved exactly as-is. The following lessons were learned through extensive debugging:
+
+### The GNU link vs Microsoft link.exe Conflict
+
+The most critical issue in ICU+Cygwin+MSVC builds is the conflict between:
+- **GNU link** (`/usr/bin/link`) - Cygwin's symbolic link utility
+- **Microsoft link.exe** - MSVC linker required for ICU compilation
+
+**Solution**: PATH must be carefully manipulated in each build step to ensure MSVC's `link.exe` is found before Cygwin's `link`. This is done via:
+```bash
+# Remove Cygwin's link from PATH to avoid conflict with MSVC link.exe
+export PATH=$(echo "$PATH" | sed 's|/usr/bin:||g' | sed 's|:/usr/bin||g')
+# Add /usr/bin back at the end (after MSVC tools)
+export PATH="$PATH:/usr/bin"
+```
+
+### Why the Working Configuration Works
+
+The current working configuration (`8cc99c0` and later) succeeds because:
+
+1. **Cygwin Installation Location**: `D:\cygwin` (not `C:\cygwin`) - affects PATH resolution
+2. **Matrix Strategy**: Even single-value matrices provide proper variable scoping
+3. **Inline PATH Setup**: Environment setup in each step (not centralized script)
+4. **Specific Shell Invocation**: `D:\cygwin\bin\bash.exe --login -o igncr {0}`
+5. **Environment Variable Passing**: Explicit passing of `VCINSTALLDIR`, `WindowsSdkBinPath`, `PATH`
+
+### What NOT to Change
+
+**DO NOT** attempt these "optimizations" - they break the build:
+- ❌ Centralizing PATH setup into external scripts
+- ❌ Removing the matrix strategy (even for single values)
+- ❌ Changing Cygwin install location from `D:\cygwin`
+- ❌ Modifying the shell invocation pattern
+- ❌ Changing environment variable references from `matrix.*` to `env.*`
+
+### Common Failure Patterns
+
+1. **"link.exe is not a valid linker"**: GNU link vs Microsoft link.exe conflict
+2. **"command not found"**: Line ending issues, use `-o igncr` flag
+3. **PATH not found errors**: MSVC tools not properly prioritized in PATH
+4. **Configuration script failures**: Environment variables not properly expanded
+
+### Debugging Guidelines
+
+When the build fails:
+1. **First check**: Is `link.exe` being found correctly? Run `which link` and verify it's Microsoft's linker
+2. **Second check**: Are MSVC tools in PATH? Verify `cl.exe` location
+3. **Third check**: Are environment variables properly passed to Cygwin bash?
+4. **Last resort**: Compare against the working commit `8cc99c0` line-by-line
+
+### Build Performance
+
+- **Typical build time**: 5-6 minutes for full ICU static library build
+- **Cache effectiveness**: ICU source cache saves ~30 seconds on subsequent runs
+- **Artifact size**: ~15-20MB for complete ICU x64 Release package
