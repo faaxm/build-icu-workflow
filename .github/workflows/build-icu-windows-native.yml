@@ -1,0 +1,265 @@
+name: Build ICU Static Library (Windows Native MSVC)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master, main ]
+    paths:
+      - '.github/workflows/build-icu-windows-native.yml'
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - '.github/workflows/build-icu-windows-native.yml'
+
+jobs:
+  build-icu-windows-native:
+    runs-on: windows-latest
+    
+    strategy:
+      matrix:
+        arch: [x64]
+        build_type: [Release]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+          
+      - name: Cache ICU source
+        uses: actions/cache@v4
+        id: cache-icu-source
+        with:
+          path: |
+            icu-source.zip
+            icu-release-77-1
+          key: icu-source-77-1-${{ runner.os }}
+          
+      - name: Download ICU 77.1 source
+        if: steps.cache-icu-source.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          $url = "https://github.com/unicode-org/icu/archive/refs/tags/release-77-1.zip"
+          $output = "icu-source.zip"
+          Write-Host "Downloading ICU source from: $url"
+          Invoke-WebRequest -Uri $url -OutFile $output
+          Write-Host "Extracting ICU source..."
+          Expand-Archive -Path $output -DestinationPath . -Force
+          Write-Host "ICU source extracted successfully"
+          Write-Host "Verifying directory structure:"
+          if (Test-Path "icu-release-77-1\icu4c\source") {
+            Write-Host "Found icu4c/source directory"
+            Get-ChildItem "icu-release-77-1\icu4c\source" | Select-Object -First 5 Name
+          } else {
+            Write-Host "icu4c/source directory not found"
+            Write-Host "Available directories:"
+            Get-ChildItem "icu-release-77-1" | Select-Object Name
+          }
+          
+      - name: Verify Visual Studio solution exists
+        shell: powershell
+        run: |
+          $solutionPath = "icu-release-77-1\icu4c\source\allinone\allinone.sln"
+          if (Test-Path $solutionPath) {
+            Write-Host "Found Visual Studio solution: $solutionPath"
+          } else {
+            Write-Host "ERROR: Visual Studio solution not found at: $solutionPath"
+            Write-Host "Available files in allinone directory:"
+            if (Test-Path "icu-release-77-1\icu4c\source\allinone") {
+              Get-ChildItem "icu-release-77-1\icu4c\source\allinone" | Select-Object Name
+            } else {
+              Write-Host "allinone directory does not exist"
+            }
+            exit 1
+          }
+          
+      - name: Update Visual Studio toolset for VS 2022
+        shell: powershell
+        run: |
+          $propsFile = "icu-release-77-1\icu4c\source\allinone\Build.Windows.ProjectConfiguration.props"
+          if (Test-Path $propsFile) {
+            Write-Host "Updating project configuration for Visual Studio 2022..."
+            $content = Get-Content $propsFile -Raw
+            # Update toolset to v143 (VS 2022)
+            $content = $content -replace '<PlatformToolset>v141</PlatformToolset>', '<PlatformToolset>v143</PlatformToolset>'
+            $content = $content -replace '<PlatformToolset>v140</PlatformToolset>', '<PlatformToolset>v143</PlatformToolset>'
+            Set-Content $propsFile -Value $content -Encoding UTF8
+            Write-Host "Updated toolset to v143 (Visual Studio 2022)"
+          } else {
+            Write-Host "WARNING: Could not find project configuration file: $propsFile"
+          }
+          
+      - name: Build ICU using MSBuild
+        shell: powershell
+        run: |
+          $solutionPath = "icu-release-77-1\icu4c\source\allinone\allinone.sln"
+          $platform = "${{ matrix.arch }}"
+          $configuration = "${{ matrix.build_type }}"
+          
+          Write-Host "Building ICU with MSBuild..."
+          Write-Host "Solution: $solutionPath"
+          Write-Host "Platform: $platform"
+          Write-Host "Configuration: $configuration"
+          
+          # Build static libraries only by targeting specific projects
+          # Skip UWP projects and focus on core static libraries
+          msbuild $solutionPath `
+            /p:Configuration=$configuration `
+            /p:Platform=$platform `
+            /p:SkipUWP=true `
+            /p:UseDebugLibraries=$($configuration -eq 'Debug') `
+            /m `
+            /verbosity:normal `
+            /target:common,i18n,io,tu,uc
+            
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: MSBuild failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          
+          Write-Host "ICU build completed successfully"
+          
+      - name: Locate and copy build artifacts
+        shell: powershell
+        run: |
+          $platform = "${{ matrix.arch }}"
+          $configuration = "${{ matrix.build_type }}"
+          $artifactName = "icu-$platform-$configuration"
+          
+          # Look for build output in various possible locations
+          $possiblePaths = @(
+            "icu-release-77-1\icu4c\bin\",
+            "icu-release-77-1\icu4c\bin64\",
+            "icu-release-77-1\icu4c\lib\",
+            "icu-release-77-1\icu4c\lib64\",
+            "icu-release-77-1\icu4c\source\lib\",
+            "icu-release-77-1\icu4c\source\bin\"
+          )
+          
+          Write-Host "Searching for build artifacts..."
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              Write-Host "Found directory: $path"
+              Get-ChildItem $path -Recurse | Select-Object -First 10 Name, FullName
+            }
+          }
+          
+          # Create artifact directory
+          New-Item -ItemType Directory -Path $artifactName -Force
+          New-Item -ItemType Directory -Path "$artifactName\lib" -Force
+          New-Item -ItemType Directory -Path "$artifactName\include" -Force
+          New-Item -ItemType Directory -Path "$artifactName\bin" -Force
+          
+          # Copy libraries (look for .lib files)
+          $libFound = $false
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              $libFiles = Get-ChildItem "$path\*.lib" -ErrorAction SilentlyContinue
+              if ($libFiles) {
+                Write-Host "Found libraries in: $path"
+                Copy-Item "$path\*.lib" -Destination "$artifactName\lib\" -Force
+                $libFound = $true
+              }
+            }
+          }
+          
+          if (-not $libFound) {
+            Write-Host "ERROR: No .lib files found in any expected location"
+            exit 1
+          }
+          
+          # Copy headers
+          $headerPath = "icu-release-77-1\icu4c\source\common\unicode"
+          if (Test-Path $headerPath) {
+            Copy-Item $headerPath -Destination "$artifactName\include\" -Recurse -Force
+            Write-Host "Copied headers from: $headerPath"
+          }
+          
+          # Additional header locations
+          $additionalHeaders = @(
+            "icu-release-77-1\icu4c\source\i18n\unicode",
+            "icu-release-77-1\icu4c\source\io\unicode"
+          )
+          
+          foreach ($headerDir in $additionalHeaders) {
+            if (Test-Path $headerDir) {
+              Copy-Item "$headerDir\*" -Destination "$artifactName\include\unicode\" -Force
+              Write-Host "Copied additional headers from: $headerDir"
+            }
+          }
+          
+          # Copy binaries if they exist
+          $binFound = $false
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              $binFiles = Get-ChildItem "$path\*.exe" -ErrorAction SilentlyContinue
+              if ($binFiles) {
+                Copy-Item "$path\*.exe" -Destination "$artifactName\bin\" -Force
+                $binFound = $true
+              }
+            }
+          }
+          
+          # Create build info file
+          @"
+          ICU Version: 77.1
+          Architecture: $platform
+          Build Type: $configuration
+          Compiler: MSVC (Visual Studio 2022)
+          Build Environment: Native Windows (MSBuild)
+          Build Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
+          Static Libraries: Yes
+          Shared Libraries: No
+          "@ | Out-File -FilePath "$artifactName\BUILD_INFO.txt" -Encoding UTF8
+          
+          # Compress artifacts
+          Compress-Archive -Path $artifactName -DestinationPath "$artifactName.zip" -Force
+          
+          Write-Host "Artifacts packaged successfully"
+          
+      - name: Upload ICU build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: icu-windows-native-${{ matrix.arch }}-${{ matrix.build_type }}
+          path: icu-${{ matrix.arch }}-${{ matrix.build_type }}.zip
+          retention-days: 30
+          
+      - name: Verify build output
+        shell: powershell
+        run: |
+          $platform = "${{ matrix.arch }}"
+          $configuration = "${{ matrix.build_type }}"
+          $artifactName = "icu-$platform-$configuration"
+          
+          Write-Host "=== Build Verification ==="
+          Write-Host "Architecture: $platform"
+          Write-Host "Build Type: $configuration"
+          
+          if (Test-Path "$artifactName\lib") {
+            Write-Host "Static libraries built:"
+            Get-ChildItem "$artifactName\lib\*.lib" | ForEach-Object { 
+              Write-Host "  $($_.Name) ($([math]::Round($_.Length/1MB, 2)) MB)"
+            }
+          } else {
+            Write-Host "ERROR: lib directory not found"
+            exit 1
+          }
+          
+          if (Test-Path "$artifactName\include\unicode") {
+            $headerCount = (Get-ChildItem "$artifactName\include\unicode\*.h").Count
+            Write-Host "Header files installed: $headerCount files"
+            Get-ChildItem "$artifactName\include\unicode\*.h" | Select-Object -First 5 Name | ForEach-Object {
+              Write-Host "  $($_.Name)"
+            }
+            if ($headerCount -gt 5) {
+              Write-Host "  ... and $($headerCount - 5) more"
+            }
+          } else {
+            Write-Host "ERROR: Headers not found"
+            exit 1
+          }
+          
+          Write-Host "=== Native MSVC build completed successfully ==="
